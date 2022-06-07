@@ -24,6 +24,8 @@ import {
   isScalarType,
   isUnionType,
   isWrappingType,
+  buildClientSchema,
+  getIntrospectionQuery,
   parse,
   print,
   parseType,
@@ -106,6 +108,7 @@ type Props = {
   query: string,
   width?: number,
   title?: string,
+  fetcher?: any => Promise<{data: any}>,
   schema?: ?GraphQLSchema,
   onEdit: string => void,
   getDefaultFieldNames?: ?(type: GraphQLObjectType) => Array<string>,
@@ -2326,13 +2329,14 @@ function Attribution() {
   );
 }
 
-class Explorer extends React.PureComponent<Props, State> {
+class Explorer extends React.PureComponent<Props, {schema: ?GraphQLSchema}>{
   static defaultProps = {
     getDefaultFieldNames: defaultGetDefaultFieldNames,
     getDefaultScalarArgValue: defaultGetDefaultScalarArgValue,
   };
 
   state = {
+    schema: this.props.schema,
     newOperationType: 'query',
     operation: null,
     operationToScrollTo: null,
@@ -2345,7 +2349,25 @@ class Explorer extends React.PureComponent<Props, State> {
       container.scrollLeft = 0;
     }
   };
+  _fetchSchema = () => {
+    const {fetcher} = this.props;
+
+    if (fetcher) {
+      fetcher({
+        query: getIntrospectionQuery()
+      }).then(result => {
+        if (this.state.schema !== undefined) {
+          return;
+        }
+
+        this.setState({ schema: buildClientSchema(result.data) });
+      });
+    }
+  }
   componentDidMount() {
+    if (this.state.schema === undefined) {
+      this._fetchSchema();
+    }
     this._resetScroll();
   }
 
@@ -2368,7 +2390,8 @@ class Explorer extends React.PureComponent<Props, State> {
   };
 
   render() {
-    const {schema, query, makeDefaultArg} = this.props;
+    const {query, makeDefaultArg} = this.props;
+    const {schema} = this.state;
 
     if (!schema) {
       return (
